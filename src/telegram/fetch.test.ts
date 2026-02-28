@@ -147,6 +147,15 @@ describe("resolveTelegramFetch", () => {
     expect(setDefaultResultOrder).toHaveBeenCalledTimes(2);
   });
 
+  it("does not replace global undici dispatcher when env proxy is configured", async () => {
+    vi.stubEnv("HTTP_PROXY", "http://127.0.0.1:8888");
+    globalThis.fetch = vi.fn(async () => ({})) as unknown as typeof fetch;
+
+    resolveTelegramFetch(undefined, { network: { autoSelectFamily: true } });
+
+    expect(setGlobalDispatcher).not.toHaveBeenCalled();
+  });
+
   it("replaces global undici dispatcher with autoSelectFamily-enabled agent", async () => {
     globalThis.fetch = vi.fn(async () => ({})) as unknown as typeof fetch;
     resolveTelegramFetch(undefined, { network: { autoSelectFamily: true } });

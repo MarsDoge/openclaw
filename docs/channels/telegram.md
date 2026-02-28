@@ -693,6 +693,7 @@ channels:
 ```
 
     - Node 22+ defaults to `autoSelectFamily=true` (except WSL2) and `dnsResultOrder=ipv4first`.
+    - If you rely on `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` environment variables for Node's built-in fetch (undici), ensure `NODE_USE_ENV_PROXY=1` is set for the Gateway service. (Without this, global fetch may ignore proxy env vars.)
     - If your host is WSL2 or explicitly works better with IPv4-only behavior, force family selection:
 
 ```yaml

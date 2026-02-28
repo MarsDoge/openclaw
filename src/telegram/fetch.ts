@@ -1,6 +1,29 @@
 import * as dns from "node:dns";
 import * as net from "node:net";
 import { Agent, setGlobalDispatcher } from "undici";
+
+const ENV_PROXY_KEYS = [
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+] as const;
+
+function hasEnvProxyConfigured(): boolean {
+  // Node (undici) only respects env proxy for global fetch when NODE_USE_ENV_PROXY=1.
+  if (process.env.NODE_USE_ENV_PROXY === "1") {
+    return true;
+  }
+  for (const key of ENV_PROXY_KEYS) {
+    const value = process.env[key];
+    if (typeof value === "string" && value.trim()) {
+      return true;
+    }
+  }
+  return false;
+}
 import type { TelegramNetworkConfig } from "../config/types.telegram.js";
 import { resolveFetch } from "../infra/fetch.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -44,19 +67,29 @@ function applyTelegramNetworkWorkarounds(network?: TelegramNetworkConfig): void 
     autoSelectDecision.value !== null &&
     autoSelectDecision.value !== appliedGlobalDispatcherAutoSelectFamily
   ) {
-    try {
-      setGlobalDispatcher(
-        new Agent({
-          connect: {
-            autoSelectFamily: autoSelectDecision.value,
-            autoSelectFamilyAttemptTimeout: 300,
-          },
-        }),
-      );
+    // IMPORTANT: setGlobalDispatcher() is process-global. If the process is configured
+    // to use an HTTP proxy (common for some providers), replacing the global dispatcher
+    // here can accidentally bypass that proxy for unrelated callers.
+    if (hasEnvProxyConfigured()) {
       appliedGlobalDispatcherAutoSelectFamily = autoSelectDecision.value;
-      log.info(`global undici dispatcher autoSelectFamily=${autoSelectDecision.value}`);
-    } catch {
-      // ignore if setGlobalDispatcher is unavailable
+      log.info(
+        `skip global undici dispatcher override (env proxy configured); autoSelectFamily=${autoSelectDecision.value}`,
+      );
+    } else {
+      try {
+        setGlobalDispatcher(
+          new Agent({
+            connect: {
+              autoSelectFamily: autoSelectDecision.value,
+              autoSelectFamilyAttemptTimeout: 300,
+            },
+          }),
+        );
+        appliedGlobalDispatcherAutoSelectFamily = autoSelectDecision.value;
+        log.info(`global undici dispatcher autoSelectFamily=${autoSelectDecision.value}`);
+      } catch {
+        // ignore if setGlobalDispatcher is unavailable
+      }
     }
   }
 
